@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Yılan Oyunu</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at center, #16213e 0%, #0a0a14 100%);
+    font-family: 'Segoe UI', Arial, sans-serif;
+    color: #e8e8e8;
+    gap: 14px;
+  }
+  h1 { font-size: 28px; letter-spacing: 2px; color: #4ade80; text-shadow: 0 0 12px #4ade8066; }
+  #hud { display: flex; gap: 30px; font-size: 18px; }
+  #hud span b { color: #fbbf24; }
+  #board {
+    background: #0d1b2a;
+    border: 3px solid #4ade80;
+    border-radius: 8px;
+    box-shadow: 0 0 30px #4ade8033;
+  }
+  #overlay {
+    position: absolute;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    background: #000000cc;
+    border-radius: 8px;
+    padding: 30px 40px;
+    text-align: center;
+  }
+  #overlay h2 { color: #ef4444; font-size: 26px; }
+  #overlay p { color: #e8e8e8; }
+  #wrap { position: relative; }
+  .hint { font-size: 13px; color: #9ca3af; }
+</style>
+</head>
+<body>
+  <h1>🐍 YILAN</h1>
+  <div id="hud">
+    <span>Skor: <b id="score">0</b></span>
+    <span>Rekor: <b id="best">0</b></span>
+  </div>
+  <div id="wrap">
+    <canvas id="board" width="400" height="400"></canvas>
+    <div id="overlay">
+      <h2>Oyun Bitti!</h2>
+      <p id="finalScore"></p>
+      <p>Yeniden başlamak için <b>Boşluk</b> veya <b>Enter</b> tuşuna bas.</p>
+    </div>
+  </div>
+  <p class="hint">Ok tuşları veya WASD ile oyna · Dokunmatik kaydırma da çalışır</p>
+
+<script>
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+const finalScoreEl = document.getElementById('finalScore');
+
+const SIZE = 20;
+const COLS = canvas.width / SIZE;
+const ROWS = canvas.height / SIZE;
+
+let snake, dir, nextDir, food, score, best, speed, timer, alive;
+
+best = Number(localStorage.getItem('snakeBest') || 0);
+bestEl.textContent = best;
+
+function reset() {
+  snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+  dir = { x: 1, y: 0 };
+  nextDir = dir;
+  score = 0;
+  speed = 140;
+  alive = true;
+  scoreEl.textContent = 0;
+  overlay.style.display = 'none';
+  spawnFood();
+  clearInterval(timer);
+  timer = setInterval(tick, speed);
+}
+
+function spawnFood() {
+  do {
+    food = {
+      x: Math.floor(Math.random() * COLS),
+      y: Math.floor(Math.random() * ROWS)
+    };
+  } while (snake.some(s => s.x === food.x && s.y === food.y));
+}
+
+function tick() {
+  dir = nextDir;
+  const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+  if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS ||
+      snake.some(s => s.x === head.x && s.y === head.y)) {
+    gameOver();
+    return;
+  }
+
+  snake.unshift(head);
+
+  if (head.x === food.x && head.y === food.y) {
+    score += 10;
+    scoreEl.textContent = score;
+    spawnFood();
+    if (speed > 60) {
+      speed -= 4;
+      clearInterval(timer);
+      timer = setInterval(tick, speed);
+    }
+  } else {
+    snake.pop();
+  }
+
+  draw();
+}
+
+function draw() {
+  ctx.fillStyle = '#0d1b2a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = '#0f2740';
+  for (let x = 0; x < COLS; x++)
+    for (let y = 0; y < ROWS; y++)
+      if ((x + y) % 2 === 0)
+        ctx.fillRect(x * SIZE, y * SIZE, SIZE, SIZE);
+
+  ctx.fillStyle = '#ef4444';
+  ctx.beginPath();
+  ctx.arc(food.x * SIZE + SIZE / 2, food.y * SIZE + SIZE / 2, SIZE / 2 - 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  snake.forEach((s, i) => {
+    ctx.fillStyle = i === 0 ? '#4ade80' : '#22c55e';
+    ctx.fillRect(s.x * SIZE + 1, s.y * SIZE + 1, SIZE - 2, SIZE - 2);
+  });
+}
+
+function gameOver() {
+  alive = false;
+  clearInterval(timer);
+  if (score > best) {
+    best = score;
+    localStorage.setItem('snakeBest', best);
+    bestEl.textContent = best;
+  }
+  finalScoreEl.textContent = 'Skorun: ' + score;
+  overlay.style.display = 'flex';
+}
+
+function setDir(x, y) {
+  if (!alive) return;
+  if (x === -dir.x && y === -dir.y) return;
+  nextDir = { x, y };
+}
+
+document.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'arrowup' || k === 'w') setDir(0, -1);
+  else if (k === 'arrowdown' || k === 's') setDir(0, 1);
+  else if (k === 'arrowleft' || k === 'a') setDir(-1, 0);
+  else if (k === 'arrowright' || k === 'd') setDir(1, 0);
+  else if ((k === ' ' || k === 'enter') && !alive) reset();
+  if (k.startsWith('arrow')) e.preventDefault();
+});
+
+let touchStart = null;
+canvas.addEventListener('touchstart', e => {
+  touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+}, { passive: true });
+canvas.addEventListener('touchend', e => {
+  if (!touchStart) return;
+  const dx = e.changedTouches[0].clientX - touchStart.x;
+  const dy = e.changedTouches[0].clientY - touchStart.y;
+  if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? 1 : -1, 0);
+  else setDir(0, dy > 0 ? 1 : -1);
+  touchStart = null;
+});
+
+reset();
+</script>
+</body>
+</html>
